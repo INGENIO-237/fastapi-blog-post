@@ -1,37 +1,34 @@
-from fastapi import FastAPI, HTTPException, status, Response
-from pydantic import BaseModel
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import time
+from fastapi import Depends, FastAPI, HTTPException, status, Response
 
-from . import models
-from .database import engine, get_db
+# import psycopg2
+# from psycopg2.extras import RealDictCursor
+# import time
+from sqlalchemy.orm import Session
+
+from api import schemas
+from api import models
+from api.database import engine, get_db
+
 
 models.Base.metadata.create_all(bind=engine)
 
 server = FastAPI()
 
 # DB connection
-while True:
-    try:
-        conn = psycopg2.connect(
-            database="fastapi_blog",
-            user="postgres",
-            password="postgres",
-            cursor_factory=RealDictCursor,
-        )
-        cursor = conn.cursor()
-        print("Connected to DB")
-        break
-    except ConnectionError as e:
-        time.sleep(2)
-        print(e.strerror)
-
-
-class Post(BaseModel):
-    title: str
-    content: str
-    published: bool = True
+# while True:
+#     try:
+#         conn = psycopg2.connect(
+#             database="fastapi_blog",
+#             user="postgres",
+#             password="postgres",
+#             cursor_factory=RealDictCursor,
+#         )
+#         cursor = conn.cursor()
+#         print("Connected to DB")
+#         break
+#     except ConnectionError as e:
+#         time.sleep(2)
+#         print(e.strerror)
 
 
 # posts = [
@@ -61,32 +58,41 @@ def healthCheck():
 
 
 @server.get("/posts", tags=["Posts"])
-def get_posts():
-    cursor.execute("SELECT * FROM posts")
-    posts = cursor.fetchall()
-    return {"data": posts}
+def get_posts(db: Session = Depends(get_db)):
+    # cursor.execute("SELECT * FROM posts")
+    # posts = cursor.fetchall()
+    posts = db.query(models.Post).all()
+    return posts
 
 
 @server.post("/posts", status_code=status.HTTP_201_CREATED, tags=["Posts"])
-def create_post(post: Post):
-    cursor.execute(
-        """INSERT INTO posts(title, content, published) VALUES(%s, %s, %s)
-        RETURNING * """,
-        (post.title, post.content, post.published),
-    )
+def create_post(post: schemas.Post, db: Session = Depends(get_db)):
+    # cursor.execute(
+    #     """INSERT INTO posts(title, content, published) VALUES(%s, %s, %s)
+    #     RETURNING * """,
+    #     (post.title, post.content, post.published),
+    # )
 
-    post = cursor.fetchone()
+    # post = cursor.fetchone()
 
-    conn.commit()
+    # conn.commit()
 
-    return {"data": post}
+    createdPost = models.Post(**post.model_dump())
+
+    db.add(createdPost)
+    db.commit()
+    db.refresh(createdPost)
+
+    return createdPost
 
 
 @server.get("/posts/{id}", tags=["Posts"])
-def get_post(id: int):
-    cursor.execute("SELECT * FROM posts WHERE id = %s", [str(id)])
+def get_post(id: int, db: Session = Depends(get_db)):
+    # cursor.execute("SELECT * FROM posts WHERE id = %s", [str(id)])
 
-    post = cursor.fetchone()
+    # post = cursor.fetchone()
+
+    post = db.query(models.Post).filter(models.Post.id == id).first()
 
     if post is None:
         raise HTTPException(
@@ -96,22 +102,32 @@ def get_post(id: int):
 
 
 @server.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Posts"])
-def delete_post(id: int):
-    post = get_post(id)
+def delete_post(id: int, db: Session = Depends(get_db)):
+    post = get_post(id=id, db=db)
 
-    cursor.execute("DELETE FROM posts WHERE id=%s", [str(post["id"])])
-    conn.commit()
+    # cursor.execute("DELETE FROM posts WHERE id=%s", [str(post["id"])])
+    # conn.commit()
+
+    db.query(models.Post).filter(models.Post.id == post.id).delete(
+        synchronize_session=False
+    )
+    db.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @server.put("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Posts"])
-def update_post(id: int, post: Post):
+def update_post(id: int, post: schemas.Post, db: Session = Depends(get_db)):
     existingPost = get_post(id)
 
-    cursor.execute(
-        """UPDATE posts set title=%s, content=%s, published=%s WHERE id=%s""",
-        [post.title, post.content, post.published, str(existingPost["id"])],
-    )
+    # cursor.execute(
+    #     """UPDATE posts set title=%s, content=%s, published=%s WHERE id=%s""",
+    #     [post.title, post.content, post.published, str(existingPost["id"])],
+    # )
 
-    conn.commit()
+    # conn.commit()
+
+    db.query(models.Post).filter(models.Post.id == existingPost.id).update(
+        post.model_dump(), synchronize_session=False
+    )
+    db.commit()
