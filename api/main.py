@@ -106,7 +106,7 @@ def update_post(id: int, post: Post):
 
     cursor.execute(
         """UPDATE posts set title=%s, content=%s, published=%s WHERE id=%s""",
-        [post.title, post.content, str(existingPost["id"])],
+        [post.title, post.content, post.published, str(existingPost["id"])],
     )
 
     conn.commit()
