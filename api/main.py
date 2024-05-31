@@ -1,4 +1,5 @@
 from fastapi import Depends, FastAPI, HTTPException, status, Response
+from typing import List
 
 # import psycopg2
 # from psycopg2.extras import RealDictCursor
@@ -57,7 +58,7 @@ def healthCheck():
     return {"message": "Hello world"}
 
 
-@server.get("/posts", tags=["Posts"])
+@server.get("/posts", tags=["Posts"], response_model=List[schemas.Post])
 def get_posts(db: Session = Depends(get_db)):
     # cursor.execute("SELECT * FROM posts")
     # posts = cursor.fetchall()
@@ -65,8 +66,13 @@ def get_posts(db: Session = Depends(get_db)):
     return posts
 
 
-@server.post("/posts", status_code=status.HTTP_201_CREATED, tags=["Posts"])
-def create_post(post: schemas.Post, db: Session = Depends(get_db)):
+@server.post(
+    "/posts",
+    status_code=status.HTTP_201_CREATED,
+    tags=["Posts"],
+    response_model=schemas.Post,
+)
+def create_post(post: schemas.PostPayload, db: Session = Depends(get_db)):
     # cursor.execute(
     #     """INSERT INTO posts(title, content, published) VALUES(%s, %s, %s)
     #     RETURNING * """,
@@ -86,7 +92,7 @@ def create_post(post: schemas.Post, db: Session = Depends(get_db)):
     return createdPost
 
 
-@server.get("/posts/{id}", tags=["Posts"])
+@server.get("/posts/{id}", tags=["Posts"], response_model=schemas.Post)
 def get_post(id: int, db: Session = Depends(get_db)):
     # cursor.execute("SELECT * FROM posts WHERE id = %s", [str(id)])
 
@@ -117,7 +123,7 @@ def delete_post(id: int, db: Session = Depends(get_db)):
 
 
 @server.put("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Posts"])
-def update_post(id: int, post: schemas.Post, db: Session = Depends(get_db)):
+def update_post(id: int, post: schemas.PostPayload, db: Session = Depends(get_db)):
     existingPost = get_post(id)
 
     # cursor.execute(
